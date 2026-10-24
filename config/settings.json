@@ -1,0 +1,20 @@
+{
+  "brand": "Colors VPN",
+  "supportUrl": null,
+  "termsUrl": null,
+  "privacyUrl": null,
+  "refundPolicy": null,
+  "orderTtlMinutes": null,
+  "reminderHours": null,
+  "reviewReminderHours": null,
+  "manualApproval": null,
+  "provisioning": null,
+  "trialDays": null,
+  "plans": [],
+  "instructions": {
+    "iOS": "",
+    "Android": "",
+    "Windows": "",
+    "macOS": ""
+  }
+}

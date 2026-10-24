@@ -1,0 +1,13 @@
+{
+  "name": "vpn-project-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.0.0" },
+  "scripts": {
+    "demo": "node --no-warnings src/main.js --demo",
+    "start": "node --no-warnings --env-file-if-exists=.env src/main.js",
+    "test": "node --no-warnings --test test/*.test.js",
+    "check": "node --no-warnings src/check.js"
+  }
+}
