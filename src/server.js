@@ -4,6 +4,8 @@ import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { PortalDemo } from './portal-demo.js';
 import { TelegramLogin } from './telegram-login.js';
+import { PortalPayments,readReceipt } from './portal-payments.js';
+import {plans} from '../public/portal-model.js';
 const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
 const files = { '/':['index.html','text/html; charset=utf-8'], '/app.js':['app.js','text/javascript; charset=utf-8'], '/style.css':['style.css','text/css; charset=utf-8'] };
 Object.assign(files, {
@@ -24,13 +26,14 @@ Object.assign(files, {
 const equal = (a,b) => { const x = Buffer.from(a), y = Buffer.from(b); return x.length === y.length && timingSafeEqual(x,y); };
 
 export function makeServer(v, {demo = false, adminToken = '', host = '127.0.0.1', port = 8787, telegramLogin = {}} = {}) {
-  const portal = new PortalDemo();
+  const payments = new PortalPayments(v.s);
+  const portal = new PortalDemo({store:v.s,payments});
   const login = new TelegramLogin(v.s,telegramLogin);
   const server = createServer(async (req,res) => {
     res.setHeader('X-Content-Type-Options','nosniff');
     res.setHeader('Referrer-Policy','no-referrer');
     res.setHeader('Cache-Control','no-store');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data: blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     const json = (status,data) => { res.writeHead(status,{'content-type':'application/json; charset=utf-8'}); res.end(JSON.stringify(data)); };
     try {
       // Bind API to the exact host:port; stops DNS rebinding and cross-origin writes.
@@ -57,7 +60,7 @@ export function makeServer(v, {demo = false, adminToken = '', host = '127.0.0.1'
       if (path.startsWith('/api/portal/')) {
         if(path==='/api/portal/session'&&req.method==='GET'){
           const account=login.account(req);
-          if(account||!demo)return json(200,{preview:false,account,subscription:null,source:'backend',paymentReady:false,subscriptionReady:false,authReady:login.enabled});
+          if(account||!demo)return json(200,{preview:false,account,subscription:null,source:'backend',payment:null,paymentDetails:payments.settings(),paymentReady:false,subscriptionReady:false,authReady:login.enabled});
           return json(200,{...portal.handle(path,'GET',{},req,res),authReady:login.enabled});
         }
         if(path==='/api/portal/logout'&&req.method==='POST'){
@@ -65,6 +68,14 @@ export function makeServer(v, {demo = false, adminToken = '', host = '127.0.0.1'
           login.logout(req,res);return json(200,{ok:true});
         }
         if(!demo)return json(503,{error:'Персональный кабинет ещё не подключён к backend',preview:false});
+        if(path==='/api/portal/demo/receipt'&&req.method==='POST'){
+          if(login.account(req))return json(409,{error:'Выйдите из настоящего аккаунта перед использованием демо.'});
+          const quotedPlan=plans.find(p=>p.id===req.headers['x-plan-id']);
+          if(!quotedPlan||String(quotedPlan.price)!==req.headers['x-price-quote'])return json(409,{error:'Стоимость тарифа изменилась. Обновите страницу оплаты.'});
+          const file=await readReceipt(req),s=portal.session(req,res);portal.ensureAccount(s);
+          const result=payments.create(s,req.headers['x-plan-id'],file);portal.save(s);
+          return json(200,{ok:true,preview:true,payment:result});
+        }
         if(!['GET','POST'].includes(req.method))return json(405,{error:'Метод не поддерживается'});
         let body={};if(req.method==='POST'){
           if(!req.headers['content-type']?.startsWith('application/json'))return json(415,{error:'Ожидается JSON'});
@@ -75,6 +86,14 @@ export function makeServer(v, {demo = false, adminToken = '', host = '127.0.0.1'
       }
       if (!path.startsWith('/api/')) return json(404,{error:'Не найдено'});
       if (!demo && !equal(req.headers.authorization ?? '',`Bearer ${adminToken}`)) return json(401,{error:'Нужен ADMIN_TOKEN'});
+      const receiptFile=path.match(/^\/api\/portal-receipts\/([a-f0-9-]{36})\/file$/);
+      if(receiptFile&&req.method==='GET'){
+        if(!demo)return json(503,{error:'Выдача чеков пока доступна только в локальном демо.'});
+        const file=payments.file(receiptFile[1]);
+        res.setHeader('Content-Security-Policy',"default-src 'none'; sandbox");
+        res.writeHead(200,{'content-type':'application/octet-stream','content-disposition':`attachment; filename="receipt-${file.id}.${({'image/jpeg':'jpg','image/png':'png','image/webp':'webp','application/pdf':'pdf'})[file.mime]}"`});
+        return res.end(file.bytes);
+      }
       let body = {};
       if (req.method === 'POST') {
         if (!req.headers['content-type']?.startsWith('application/json')) return json(415,{error:'Ожидается application/json'});
@@ -83,7 +102,12 @@ export function makeServer(v, {demo = false, adminToken = '', host = '127.0.0.1'
         try { body = JSON.parse(raw || '{}'); } catch { return json(400,{error:'Некорректный JSON'}); }
       } else if (req.method !== 'GET') return json(405,{error:'Метод не поддерживается'});
       const actor = v.admins[0];
-      if (path === '/api/state' && req.method === 'GET') return json(200,{demo,settings:v.settings.value,readiness:v.settings.readiness(),client:demo?v.snapshot('demo-user'):null,...v.dashboard()});
+      if (path === '/api/state' && req.method === 'GET') return json(200,{demo,settings:v.settings.value,readiness:v.settings.readiness(),client:demo?v.snapshot('demo-user'):null,portalReceipts:demo?payments.list():[],manualPayment:payments.settings(),...v.dashboard()});
+      if(path==='/api/portal-payment-settings'&&req.method==='POST'){v.admin(actor);return json(200,payments.saveSettings(body,actor));}
+      if(path==='/api/portal-receipt-review'&&req.method==='POST'){
+        v.admin(actor);if(!demo)return json(503,{error:'Проверка чеков сайта пока доступна только в локальном демо.'});
+        return json(200,payments.review(body.id,body.action,body.reason,actor,portal));
+      }
       if (path === '/api/settings' && req.method === 'POST') {
         v.admin(actor); v.settings.save(body); v.s.log('web-admin','settings_changed','settings'); return json(200,{ok:true});
       }

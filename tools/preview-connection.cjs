@@ -26,7 +26,7 @@ const { pathToFileURL } = require('node:url');
     await page.locator('.connection-card').screenshot({path:resolve(output,'connection-card-mobile.png')});
     await page.goto('http://127.0.0.1:8787/connect');
     await page.locator('.connection-steps li').last().waitFor();
-    if(await page.locator('.connection-limit').textContent()!=='◉ Доступ на 2 устройства')throw Error('Device limit missing');
+    if(await page.locator('.connection-limit').textContent()!=='◉ Доступ на 3 устройства')throw Error('Device limit missing');
     if(errors.length)throw Error(errors.join('\n'));
     console.log(JSON.stringify({ok:true,steps:5,downloadBlock:false,brand:'Colors VPN',mobileOverflow:false,browserErrors:errors,output},null,2));
   } finally {await browser.close();}

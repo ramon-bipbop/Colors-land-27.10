@@ -4,7 +4,7 @@ import {plans,remaining,addCalendarMonths} from '../public/portal-model.js';
 import {AccountLinks} from '../src/account-links.js';
 import {RemnawaveReader} from '../src/remnawave-reader.js';
 import {PortalDemo} from '../src/portal-demo.js';
-test('Утверждённые цены за весь период, в рублях',()=>assert.deepEqual(plans.map(p=>[p.months,p.price]),[[1,299],[3,699],[6,1300],[12,2440]]));
+test('Утверждённые цены за весь период, в рублях',()=>assert.deepEqual(plans.map(p=>[p.months,p.price]),[[1,250],[3,550],[6,990],[12,1850]]));
 test('Период до календарного месяца отображается днями, далее — календарно',()=>{
   const now=Date.parse('2026-01-31T10:00:00+03:00');
   assert.equal(remaining('2026-02-28T10:00:00+03:00',now).calendar,false);

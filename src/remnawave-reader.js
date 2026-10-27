@@ -1,3 +1,4 @@
+import {deviceType} from '../public/portal-model.js';
 // Server-only read adapter. The authenticated backend supplies the user's stored panel ID.
 // Version must be confirmed against the deployed panel before integration.
 export class RemnawaveReader {
@@ -20,7 +21,7 @@ export class RemnawaveReader {
     const devices=Array.isArray(hw?.devices)?hw.devices:null;
     return {status:u.status,expiresAt:u.expireAt,deviceLimit:u.hwidDeviceLimit??null,
       devicesUsed:devices?devices.length:null,
-      devices:devices?.map(d=>({name:d.deviceModel??d.platform??'Устройство',platform:d.osVersion??d.platform??'',registered:true}))??[],
+      devices:devices?.map(d=>({name:d.deviceModel??d.platform??'Устройство',platform:[d.platform,d.osVersion].filter(Boolean).join(' · '),type:deviceType({name:d.deviceModel,platform:d.platform,osVersion:d.osVersion}),registered:true}))??[],
       // Never forward protocol passwords, raw HWIDs or complete panel responses to the browser.
       subscriptionUrl:u.status==='ACTIVE'?u.subscriptionUrl??null:null,syncedAt:new Date().toISOString()};
   }
